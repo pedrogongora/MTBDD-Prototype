@@ -1,0 +1,191 @@
+
+options {
+   IGNORE_CASE = false;
+   STATIC      = false; // allows simultaneously running several instances of the parser
+}
+
+
+PARSER_BEGIN (BooleanModelParser)
+
+private: list<NextStateAssignment*>* assignments;
+
+PARSER_END (BooleanModelParser)
+
+
+SKIP: {
+    " "
+    | "\t"
+    | "\n"
+    | "\r"
+    | "\r\n"
+    | < "//" (~["\n", "\r"])* > // single-line comments
+    | < "/*" (~["*"])* "*"
+        ("*" | ~["*","/"] (~["*"])* "*")* "/" > // multi-line comments
+}
+
+
+TOKEN: {
+      <NOT:                 "~"> // logical connectives
+    | <AND:                 "&">
+    | <OR:                  "|">
+    | <IFF:                 "=">
+    | <IMPLIES:             "->">
+    
+    | <LPAR:                "("> // delimiters
+    | <RPAR:                ")">
+    | <LBRACKET:            "[">
+    | <RBRACKET:            "]">
+    | <DOT:                 ".">
+    | <COMMA:               ",">
+    | <COLON:               ":">
+    | <SEMICOLON:           ";">
+    
+    | <ASSIGN:              ":="> // others
+    | <ASTERISK:            "*">
+    
+    | <TRUE:                "true">
+    | <FALSE:               "false">
+    
+    | <IDENTIFIER:          "x" <NONZ_DIGIT> (<DIGIT>)* >
+    | <NUMBER:              (<DIGIT>)* (<DOT>(<DIGIT>)*)? >
+    | <LETTER:              ["a"-"z","A"-"Z"]>
+    | <DIGIT:               ["0"-"9"]>
+    | <NONZ_DIGIT:          ["1"-"9"]>
+    | <BIN_DIGIT:           ["0"-"1"]>
+    | <BLANKS:              " " | "\t" | "\n" | "\r" | "\r\n">
+    | <ILLEGAL_CHAR:        ~[] >
+}
+
+list<NextStateAssignment> equation_list():
+    { NextStateAssignment* assign; }
+{
+    ( assign = assignment() { assignments.push_back(assign); } )+ <EOF>
+    { return assignments; }
+}
+
+
+NextStateAssignment assignment():
+    {
+        Token* t;
+        Formula* f1;
+        list<double>* costs;
+    }
+{
+    t = <IDENTIFIER> <ASSIGN> f1 = formula()
+    <COLON> costs = number_list()
+    <SEMICOLON>
+    {
+        return new NextStateAssignment(new Variable(new string((t->image).c_str())), f1, costs);
+    }
+}
+
+list number_list():
+    {
+        Token* t;
+        list<double>* l = new list<double>();
+    }
+{
+    <LBRACKET>
+        t = <NUMBER> { l.push_back(parseDouble(new string((t->image).c_str()))); }
+        ( <COMMA> t = <NUMBER> { l.push_back(parseDouble(new string((t->image).c_str()))); } )*
+    <RBRACKET>
+    {
+        return list;
+    }
+}
+
+
+Formula formula():
+    {
+        Formula* f;
+    }
+{
+    f = iff_expression()
+    { return f; }
+}
+
+
+Formula iff_expression():
+    {
+        Formula* f1, f2;
+        Token* t;
+    }
+{
+    f1 = impl_expression()
+    (
+        t = <IFF> f2 = iff_expression()
+        { f1 = new Iff(f1, f2); }
+    )?
+    { return f1; }
+}
+
+
+Formula impl_expression():
+    {
+        Formula* f1, f2;
+        Token* t;
+    }
+{
+    f1 = or_expression()
+    (
+        t = <IMPLIES> f2 = impl_expression()
+        { f1 = new Implication(f1, f2); }
+    )?
+    { return f1; }
+}
+
+
+Formula or_expression():
+    {
+        Formula* f1, f2;
+        Token* t;
+    }
+{
+    f1 = and_expression()
+    (
+        t = <OR> f2 = or_expression()
+        { f1 = new Or(f1, f2); }
+    )?
+    { return f1; }
+}
+
+
+Formula and_expression():
+    {
+        Formula* f1, f2;
+        Token* t;
+    }
+{
+    f1 = prefix_expression()
+    (
+        t = <AND> f2 = and_expression()
+        { f1 = new And(f1, f2); }
+    )?
+    { return f1; }
+}
+
+
+Formula prefix_expression():
+    {
+        Formula* f;
+        Token*   t, varName;
+    }
+{
+      t = <NOT> f = prefix_expression()
+        { return new Not(f); }
+    | f = basic_expression() { return f; }
+}
+
+
+Formula basic_expression():
+    {
+        Formula* f, f1, f2;
+        Token* t,v;
+    }
+{
+        t = <IDENTIFIER> { return new Variable(new string((t->image).c_str())); }
+    |   t = <TRUE>  { return new BooleanConstant(true); }
+    |   t = <FALSE> { return new BooleanConstant(false); }
+    |   <LPAR> f = iff_expression() <RPAR> { return f; }
+}
+

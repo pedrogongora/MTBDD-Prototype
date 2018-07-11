@@ -1,0 +1,5 @@
+cmake_minimum_required (VERSION 3.10)
+project(MTBDD-Proto LANGUAGES CXX)
+file(GLOB_RECURSE SOURCES src/*.cpp src/*.cc src/*.h)
+#add_executable(MTBDD-Proto src/MTBDD-Proto.cpp src/NonSymbolicTest.cpp src/Stopwatch.cpp src/arrayimpl/NodeTable.cpp src/arrayimpl/NodeCache.cpp src/booleanmodel/BooleanModel.cpp src/booleanmodel/parser/*.cc)
+add_executable(MTBDD-Proto ${SOURCES})
